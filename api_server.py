@@ -1,10 +1,104 @@
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, g
 from flasgger import Swagger
 from datetime import datetime, timedelta
 import random
+import json
+import logging
+import time
 
 app = Flask(__name__)
+
+# ==================== 中文支持配置 ====================
+app.config['JSON_AS_ASCII'] = False  # 支持中文返回
+app.config['JSONIFY_MIMETYPE'] = 'application/json; charset=utf-8'
+
 swagger = Swagger(app)
+
+# ==================== 日志配置 ====================
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
+logger = logging.getLogger(__name__)
+
+# 日志颜色 (终端支持)
+class Colors:
+    GREEN = '\033[92m'
+    YELLOW = '\033[93m'
+    BLUE = '\033[94m'
+    CYAN = '\033[96m'
+    RED = '\033[91m'
+    RESET = '\033[0m'
+    BOLD = '\033[1m'
+
+@app.before_request
+def log_request_info():
+    """记录请求日志"""
+    g.start_time = time.time()
+    
+    # 获取请求体
+    request_body = None
+    if request.is_json:
+        try:
+            request_body = request.get_json(silent=True)
+        except:
+            request_body = request.data.decode('utf-8') if request.data else None
+    
+    # 打印请求日志
+    print(f"\n{Colors.GREEN}{'='*60}{Colors.RESET}")
+    print(f"{Colors.BOLD}{Colors.CYAN}>>> REQUEST{Colors.RESET}")
+    print(f"{Colors.GREEN}{'='*60}{Colors.RESET}")
+    print(f"{Colors.YELLOW}Method:{Colors.RESET} {request.method}")
+    print(f"{Colors.YELLOW}URL:{Colors.RESET} {request.url}")
+    print(f"{Colors.YELLOW}Path:{Colors.RESET} {request.path}")
+    
+    if request.args:
+        print(f"{Colors.YELLOW}Query Params:{Colors.RESET} {dict(request.args)}")
+    
+    if request.headers.get('Authorization'):
+        print(f"{Colors.YELLOW}Authorization:{Colors.RESET} {request.headers.get('Authorization')}")
+    
+    if request_body:
+        print(f"{Colors.YELLOW}Body:{Colors.RESET}")
+        print(json.dumps(request_body, ensure_ascii=False, indent=2))
+    
+    logger.info(f"REQUEST: {request.method} {request.path}")
+
+@app.after_request
+def log_response_info(response):
+    """记录响应日志"""
+    # 计算响应时间
+    duration = (time.time() - g.start_time) * 1000  # 转换为毫秒
+    
+    # 获取响应体
+    response_body = None
+    if response.content_type and 'application/json' in response.content_type:
+        try:
+            response_body = json.loads(response.get_data(as_text=True))
+        except:
+            response_body = response.get_data(as_text=True)
+    
+    # 状态码颜色
+    status_color = Colors.GREEN if response.status_code < 400 else Colors.RED
+    
+    # 打印响应日志
+    print(f"\n{Colors.BLUE}{'='*60}{Colors.RESET}")
+    print(f"{Colors.BOLD}{Colors.CYAN}<<< RESPONSE{Colors.RESET}")
+    print(f"{Colors.BLUE}{'='*60}{Colors.RESET}")
+    print(f"{Colors.YELLOW}Status:{Colors.RESET} {status_color}{response.status_code} {response.status}{Colors.RESET}")
+    print(f"{Colors.YELLOW}Duration:{Colors.RESET} {duration:.2f}ms")
+    print(f"{Colors.YELLOW}Content-Type:{Colors.RESET} {response.content_type}")
+    
+    if response_body:
+        print(f"{Colors.YELLOW}Body:{Colors.RESET}")
+        print(json.dumps(response_body, ensure_ascii=False, indent=2))
+    
+    print(f"{Colors.BLUE}{'='*60}{Colors.RESET}\n")
+    
+    logger.info(f"RESPONSE: {response.status_code} - {duration:.2f}ms")
+    
+    return response
 
 # ==================== 测试账号 ====================
 # 可用于登录测试的账号
