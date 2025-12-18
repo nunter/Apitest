@@ -170,26 +170,267 @@ def test_login_vip_user_success():
 
 @allure.feature("认证")
 @allure.story("登录")
-def test_login_failure_wrong_password():
+def test_login_params_order_reversed():
+    """测试参数顺序颠倒仍能正常登录"""
+    # {"password": "vip888","username": "vip"}
+    credentials = {"password": "vip888", "username": "vip"}
+    with allure.step("参数顺序颠倒"):
+        response = requests.post(f"{BASE_URL}/login", json=credentials)
+    
+    with allure.step("验证登录成功"):
+        assert response.status_code == 200
+        assert response.json()["success"] == True
+
+@allure.feature("认证")
+@allure.story("登录")
+def test_login_with_extra_params():
+    """测试包含额外参数仍能正常登录"""
+    # {"username": "vip", "password": "vip888","id":""}
+    credentials = {"username": "vip", "password": "vip888", "id": ""}
+    with allure.step("包含额外参数 id"):
+        response = requests.post(f"{BASE_URL}/login", json=credentials)
+    
+    with allure.step("验证登录成功"):
+        assert response.status_code == 200
+        assert response.json()["success"] == True
+
+# ==================== 登录失败测试 - 密码错误 ====================
+
+@allure.feature("认证")
+@allure.story("登录失败-密码错误")
+def test_login_wrong_password():
     """测试密码错误登录失败"""
-    credentials = {"username": "admin", "password": "wrongpassword"}
+    # {"username": "vip", "password": "vip123"}
+    credentials = {"username": "vip", "password": "vip123"}
     with allure.step("使用错误密码登录"):
         response = requests.post(f"{BASE_URL}/login", json=credentials)
     
     with allure.step("验证登录失败"):
         assert response.status_code == 401
-        assert response.json()["success"] == False
+        data = response.json()
+        assert data["success"] == False
+        assert data["error_code"] == "WRONG_PASSWORD"
 
 @allure.feature("认证")
-@allure.story("登录")
-def test_login_failure_user_not_exist():
+@allure.story("登录失败-密码错误")
+def test_login_special_chars_password():
+    """测试特殊字符密码登录失败"""
+    # {"username": "vip", "password": "!@#$"}
+    credentials = {"username": "vip", "password": "!@#$"}
+    with allure.step("使用特殊字符密码登录"):
+        response = requests.post(f"{BASE_URL}/login", json=credentials)
+    
+    with allure.step("验证登录失败"):
+        assert response.status_code == 401
+        data = response.json()
+        assert data["success"] == False
+        assert data["error_code"] == "WRONG_PASSWORD"
+
+@allure.feature("认证")
+@allure.story("登录失败-密码错误")
+def test_login_short_password():
+    """测试单字符密码登录失败"""
+    # {"username": "vip", "password": "1"}
+    credentials = {"username": "vip", "password": "1"}
+    with allure.step("使用单字符密码登录"):
+        response = requests.post(f"{BASE_URL}/login", json=credentials)
+    
+    with allure.step("验证登录失败"):
+        assert response.status_code == 401
+        data = response.json()
+        assert data["success"] == False
+        assert data["error_code"] == "WRONG_PASSWORD"
+
+@allure.feature("认证")
+@allure.story("登录失败-密码错误")
+def test_login_mixed_password():
+    """测试混合字符密码登录失败"""
+    # {"username": "vip", "password": "123456dsfgsdfgsrt345ert3456ert3456edft3456"}
+    credentials = {"username": "vip", "password": "123456dsfgsdfgsrt345ert3456ert3456edft3456"}
+    with allure.step("使用混合字符密码登录"):
+        response = requests.post(f"{BASE_URL}/login", json=credentials)
+    
+    with allure.step("验证登录失败"):
+        assert response.status_code == 401
+        data = response.json()
+        assert data["success"] == False
+        assert data["error_code"] == "WRONG_PASSWORD"
+
+# ==================== 登录失败测试 - 用户不存在 ====================
+
+@allure.feature("认证")
+@allure.story("登录失败-用户不存在")
+def test_login_user_not_found():
     """测试用户不存在登录失败"""
-    credentials = {"username": "nonexistent", "password": "123456"}
+    # {"username": "Noo", "password": "vip888"}
+    credentials = {"username": "Noo", "password": "vip888"}
     with allure.step("使用不存在的用户登录"):
         response = requests.post(f"{BASE_URL}/login", json=credentials)
     
     with allure.step("验证登录失败"):
         assert response.status_code == 401
+        data = response.json()
+        assert data["success"] == False
+        assert data["error_code"] == "USER_NOT_FOUND"
+
+# ==================== 登录失败测试 - 空值 ====================
+
+@allure.feature("认证")
+@allure.story("登录失败-空值")
+def test_login_empty_username():
+    """测试空用户名登录失败"""
+    # {"username": "", "password": "vip888"}
+    credentials = {"username": "", "password": "vip888"}
+    with allure.step("使用空用户名登录"):
+        response = requests.post(f"{BASE_URL}/login", json=credentials)
+    
+    with allure.step("验证登录失败"):
+        assert response.status_code == 400
+        data = response.json()
+        assert data["success"] == False
+        assert data["error_code"] == "EMPTY_USERNAME"
+
+@allure.feature("认证")
+@allure.story("登录失败-空值")
+def test_login_empty_password():
+    """测试空密码登录失败"""
+    # {"username": "vip", "password": ""}
+    credentials = {"username": "vip", "password": ""}
+    with allure.step("使用空密码登录"):
+        response = requests.post(f"{BASE_URL}/login", json=credentials)
+    
+    with allure.step("验证登录失败"):
+        assert response.status_code == 400
+        data = response.json()
+        assert data["success"] == False
+        assert data["error_code"] == "EMPTY_PASSWORD"
+
+@allure.feature("认证")
+@allure.story("登录失败-空值")
+def test_login_both_empty():
+    """测试用户名和密码都为空登录失败"""
+    # {"username": "", "password": ""}
+    credentials = {"username": "", "password": ""}
+    with allure.step("用户名和密码都为空"):
+        response = requests.post(f"{BASE_URL}/login", json=credentials)
+    
+    with allure.step("验证登录失败"):
+        assert response.status_code == 400
+        data = response.json()
+        assert data["success"] == False
+
+@allure.feature("认证")
+@allure.story("登录失败-空值")
+def test_login_null_username():
+    """测试 null 用户名登录失败"""
+    # {"username": null, "password": "vip888"}
+    credentials = {"username": None, "password": "vip888"}
+    with allure.step("用户名为 null"):
+        response = requests.post(f"{BASE_URL}/login", json=credentials)
+    
+    with allure.step("验证登录失败"):
+        assert response.status_code == 400
+        data = response.json()
+        assert data["success"] == False
+        assert data["error_code"] == "NULL_USERNAME"
+
+# ==================== 登录失败测试 - 类型错误 ====================
+
+@allure.feature("认证")
+@allure.story("登录失败-类型错误")
+def test_login_integer_credentials():
+    """测试数字类型用户名密码登录失败"""
+    # {"username": 123456, "password": 123456}
+    credentials = {"username": 123456, "password": 123456}
+    with allure.step("使用数字类型登录"):
+        response = requests.post(f"{BASE_URL}/login", json=credentials)
+    
+    with allure.step("验证登录失败"):
+        assert response.status_code == 400
+        data = response.json()
+        assert data["success"] == False
+        assert data["error_code"] == "INVALID_USERNAME_TYPE"
+
+@allure.feature("认证")
+@allure.story("登录失败-类型错误")
+def test_login_array_username():
+    """测试数组类型用户名登录失败"""
+    # {"username": [1,2,3], "password": "vip888"}
+    credentials = {"username": [1, 2, 3], "password": "vip888"}
+    with allure.step("使用数组类型用户名登录"):
+        response = requests.post(f"{BASE_URL}/login", json=credentials)
+    
+    with allure.step("验证登录失败"):
+        assert response.status_code == 400
+        data = response.json()
+        assert data["success"] == False
+        assert data["error_code"] == "INVALID_USERNAME_TYPE"
+
+# ==================== 登录失败测试 - 长度超限 ====================
+
+@allure.feature("认证")
+@allure.story("登录失败-长度超限")
+def test_login_username_too_long():
+    """测试超长用户名登录失败"""
+    # {"username": "test123456123456786423453454534537534537834537834537834537834537834534538456453", "password": "vip888"}
+    long_username = "test123456123456786423453454534537534537834537834537834537834537834534538456453"
+    credentials = {"username": long_username, "password": "vip888"}
+    with allure.step(f"使用超长用户名 (长度: {len(long_username)})"):
+        response = requests.post(f"{BASE_URL}/login", json=credentials)
+    
+    with allure.step("验证登录失败"):
+        assert response.status_code == 400
+        data = response.json()
+        assert data["success"] == False
+        assert data["error_code"] == "USERNAME_TOO_LONG"
+
+@allure.feature("认证")
+@allure.story("登录失败-长度超限")
+def test_login_password_too_long():
+    """测试超长密码登录失败"""
+    # {"username": "vip", "password": "123456123745345378578964563123453123453123785353453123"}
+    long_password = "123456123745345378578964563123453123453123785353453123"
+    credentials = {"username": "vip", "password": long_password}
+    with allure.step(f"使用超长密码 (长度: {len(long_password)})"):
+        response = requests.post(f"{BASE_URL}/login", json=credentials)
+    
+    with allure.step("验证登录失败"):
+        assert response.status_code == 400
+        data = response.json()
+        assert data["success"] == False
+        assert data["error_code"] == "PASSWORD_TOO_LONG"
+
+# ==================== 登录失败测试 - 安全检查 ====================
+
+@allure.feature("认证")
+@allure.story("登录失败-安全检查")
+def test_login_xss_attack():
+    """测试 XSS 攻击防护"""
+    # {"username": "<script>alert('xss')", "password": "vip888"}
+    credentials = {"username": "<script>alert('xss')", "password": "vip888"}
+    with allure.step("使用 XSS 攻击字符串"):
+        response = requests.post(f"{BASE_URL}/login", json=credentials)
+    
+    with allure.step("验证 XSS 攻击被拦截"):
+        assert response.status_code == 400
+        data = response.json()
+        assert data["success"] == False
+        assert data["error_code"] == "XSS_DETECTED"
+
+@allure.feature("认证")
+@allure.story("登录失败-安全检查")
+def test_login_sql_injection():
+    """测试 SQL 注入防护"""
+    # {"username": "vip';--", "password": "vip888"}
+    credentials = {"username": "vip';--", "password": "vip888"}
+    with allure.step("使用 SQL 注入字符串"):
+        response = requests.post(f"{BASE_URL}/login", json=credentials)
+    
+    with allure.step("验证 SQL 注入被拦截"):
+        assert response.status_code == 400
+        data = response.json()
+        assert data["success"] == False
+        assert data["error_code"] == "SQL_INJECTION_DETECTED"
 
 @allure.feature("认证")
 @allure.story("受保护资源")

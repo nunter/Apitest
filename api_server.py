@@ -367,6 +367,10 @@ def login():
       - user1 / 123456 (张三)
       - user2 / password (李四)
       - vip / vip888 (VIP用户)
+      
+      参数校验规则:
+      - username: 必填，字符串类型，长度1-50
+      - password: 必填，字符串类型，长度1-50
     parameters:
       - name: body
         in: body
@@ -380,15 +384,23 @@ def login():
             username:
               type: string
               example: admin
+              minLength: 1
+              maxLength: 50
             password:
               type: string
               example: admin123
+              minLength: 1
+              maxLength: 50
     responses:
       200:
         description: Login successful
         schema:
           type: object
           properties:
+            success:
+              type: boolean
+            message:
+              type: string
             token:
               type: string
             user:
@@ -400,41 +412,156 @@ def login():
                   type: string
                 role:
                   type: string
+      400:
+        description: Bad request (参数校验失败)
       401:
-        description: Invalid credentials
+        description: Invalid credentials (认证失败)
     """
-    data = request.get_json()
-    if not data:
-        return jsonify({"error": "请提供用户名和密码"}), 400
+    import hashlib
+    import re
+    
+    # 1. 检查请求体是否为空
+    data = request.get_json(silent=True)
+    if data is None:
+        return jsonify({
+            "success": False,
+            "error": "请求体不能为空",
+            "error_code": "EMPTY_BODY"
+        }), 400
+    
+    # 2. 检查必填字段是否存在
+    if 'username' not in data:
+        return jsonify({
+            "success": False,
+            "error": "缺少必填字段: username",
+            "error_code": "MISSING_USERNAME"
+        }), 400
+    
+    if 'password' not in data:
+        return jsonify({
+            "success": False,
+            "error": "缺少必填字段: password",
+            "error_code": "MISSING_PASSWORD"
+        }), 400
     
     username = data.get('username')
     password = data.get('password')
     
-    if username in test_accounts and test_accounts[username]['password'] == password:
-        # 生成 token
-        import hashlib
-        token = f"token_{username}_{hashlib.md5(f'{username}{datetime.now().isoformat()}'.encode()).hexdigest()[:16]}"
-        
-        # 存储 token
-        active_tokens[token] = {
-            "username": username,
-            "role": test_accounts[username]['role'],
-            "name": test_accounts[username]['name'],
-            "expires": (datetime.now() + timedelta(hours=24)).isoformat()
-        }
-        
+    # 3. 检查字段类型 - username
+    if username is None:
         return jsonify({
-            "success": True,
-            "message": "登录成功",
-            "token": token,
-            "user": {
-                "username": username,
-                "name": test_accounts[username]['name'],
-                "role": test_accounts[username]['role']
-            }
-        }), 200
+            "success": False,
+            "error": "username 不能为 null",
+            "error_code": "NULL_USERNAME"
+        }), 400
     
-    return jsonify({"success": False, "error": "用户名或密码错误"}), 401
+    if not isinstance(username, str):
+        return jsonify({
+            "success": False,
+            "error": f"username 类型错误，期望 string，实际为 {type(username).__name__}",
+            "error_code": "INVALID_USERNAME_TYPE"
+        }), 400
+    
+    # 4. 检查字段类型 - password
+    if password is None:
+        return jsonify({
+            "success": False,
+            "error": "password 不能为 null",
+            "error_code": "NULL_PASSWORD"
+        }), 400
+    
+    if not isinstance(password, str):
+        return jsonify({
+            "success": False,
+            "error": f"password 类型错误，期望 string，实际为 {type(password).__name__}",
+            "error_code": "INVALID_PASSWORD_TYPE"
+        }), 400
+    
+    # 5. 检查空字符串
+    if username.strip() == '':
+        return jsonify({
+            "success": False,
+            "error": "username 不能为空",
+            "error_code": "EMPTY_USERNAME"
+        }), 400
+    
+    if password.strip() == '':
+        return jsonify({
+            "success": False,
+            "error": "password 不能为空",
+            "error_code": "EMPTY_PASSWORD"
+        }), 400
+    
+    # 6. 检查长度限制
+    if len(username) > 50:
+        return jsonify({
+            "success": False,
+            "error": f"username 长度超出限制，最大50字符，当前{len(username)}字符",
+            "error_code": "USERNAME_TOO_LONG"
+        }), 400
+    
+    if len(password) > 50:
+        return jsonify({
+            "success": False,
+            "error": f"password 长度超出限制，最大50字符，当前{len(password)}字符",
+            "error_code": "PASSWORD_TOO_LONG"
+        }), 400
+    
+    # 7. 安全检查 - XSS 防护
+    xss_pattern = re.compile(r'<[^>]*script|javascript:|on\w+\s*=', re.IGNORECASE)
+    if xss_pattern.search(username) or xss_pattern.search(password):
+        return jsonify({
+            "success": False,
+            "error": "检测到非法字符，请勿包含特殊脚本",
+            "error_code": "XSS_DETECTED"
+        }), 400
+    
+    # 8. 安全检查 - SQL 注入防护
+    sql_pattern = re.compile(r"(\b(SELECT|INSERT|UPDATE|DELETE|DROP|UNION|WHERE)\b|--|;|')", re.IGNORECASE)
+    if sql_pattern.search(username) or sql_pattern.search(password):
+        return jsonify({
+            "success": False,
+            "error": "检测到非法字符，请勿包含特殊SQL字符",
+            "error_code": "SQL_INJECTION_DETECTED"
+        }), 400
+    
+    # 9. 验证用户是否存在
+    if username not in test_accounts:
+        return jsonify({
+            "success": False,
+            "error": "用户不存在",
+            "error_code": "USER_NOT_FOUND"
+        }), 401
+    
+    # 10. 验证密码是否正确
+    if test_accounts[username]['password'] != password:
+        return jsonify({
+            "success": False,
+            "error": "密码错误",
+            "error_code": "WRONG_PASSWORD"
+        }), 401
+    
+    # 11. 登录成功，生成 token
+    token = f"token_{username}_{hashlib.md5(f'{username}{datetime.now().isoformat()}'.encode()).hexdigest()[:16]}"
+    
+    # 存储 token
+    active_tokens[token] = {
+        "username": username,
+        "role": test_accounts[username]['role'],
+        "name": test_accounts[username]['name'],
+        "expires": (datetime.now() + timedelta(hours=24)).isoformat()
+    }
+    
+    return jsonify({
+        "success": True,
+        "message": "登录成功",
+        "token": token,
+        "user": {
+            "username": username,
+            "name": test_accounts[username]['name'],
+            "role": test_accounts[username]['role']
+        }
+    }), 200
 
 @app.route('/protected', methods=['GET'])
 def protected():
